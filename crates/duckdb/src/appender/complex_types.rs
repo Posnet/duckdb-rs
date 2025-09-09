@@ -147,6 +147,7 @@ unsafe fn get_logical_type(value: &Value) -> Option<ffi::duckdb_logical_type> {
         Value::Double(_) => Some(ffi::duckdb_create_logical_type(ffi::DUCKDB_TYPE_DUCKDB_TYPE_DOUBLE)),
         Value::Text(_) => Some(ffi::duckdb_create_logical_type(ffi::DUCKDB_TYPE_DUCKDB_TYPE_VARCHAR)),
         Value::Blob(_) => Some(ffi::duckdb_create_logical_type(ffi::DUCKDB_TYPE_DUCKDB_TYPE_BLOB)),
-        _ => None, // Other types (Date32, Time64, Interval, List, Enum, Struct, Array, Union, Decimal, Map) not supported yet
+        Value::Map(_) => Some(ffi::duckdb_create_logical_type(ffi::DUCKDB_TYPE_DUCKDB_TYPE_MAP)),
+        _ => None, // Other types (Date32, Time64, Interval, List, Enum, Struct, Array, Union, Decimal) not supported yet
     }
 }
