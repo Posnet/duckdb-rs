@@ -3,7 +3,7 @@ use std::{ffi::c_void, fmt, os::raw::c_char};
 
 use crate::{
     error::result_from_duckdb_appender,
-    types::{ToSql, ToSqlOutput},
+    types::{ToSql, ToSqlOutput, Value},
     Error,
 };
 
@@ -15,6 +15,8 @@ pub struct Appender<'conn> {
 
 #[cfg(feature = "appender-arrow")]
 mod arrow;
+
+mod complex_types;
 
 impl Appender<'_> {
     /// Append multiple rows from Iterator
@@ -86,6 +88,30 @@ impl Appender<'_> {
         let value = param.to_sql()?;
 
         let ptr = self.app;
+        
+        // Special handling for MAP values since they can't be converted to ValueRef
+        if let ToSqlOutput::Owned(Value::Map(_)) = &value {
+            // Handle MAP value directly
+            let owned_value = match value {
+                ToSqlOutput::Owned(v) => v,
+                _ => unreachable!(),
+            };
+            unsafe {
+                if let Some(mut duckdb_value) = complex_types::create_duckdb_value(&owned_value) {
+                    let rc = ffi::duckdb_append_value(ptr, duckdb_value);
+                    ffi::duckdb_destroy_value(&mut duckdb_value);
+                    if rc != 0 {
+                        return Err(Error::AppendError);
+                    }
+                    return Ok(());
+                } else {
+                    return Err(Error::ToSqlConversionFailure(
+                        "Failed to create MAP value".into()
+                    ));
+                }
+            }
+        }
+        
         let value = match value {
             ToSqlOutput::Borrowed(v) => v,
             ToSqlOutput::Owned(ref v) => ValueRef::from(v),
@@ -135,6 +161,24 @@ impl Appender<'_> {
                     },
                 )
             },
+            ValueRef::Map(_, _) => {
+                // MAP types from Arrow arrays - not yet implemented
+                return Err(Error::ToSqlConversionFailure(
+                    "Arrow MAP type appending not yet implemented".into()
+                ));
+            }
+            ValueRef::List(_, _) => {
+                // LIST types need special handling via duckdb_append_value
+                return Err(Error::ToSqlConversionFailure(
+                    "LIST type appending not yet implemented".into()
+                ));
+            }
+            ValueRef::Struct(_, _) => {
+                // STRUCT types need special handling via duckdb_append_value
+                return Err(Error::ToSqlConversionFailure(
+                    "STRUCT type appending not yet implemented".into()
+                ));
+            }
             _ => unreachable!("not supported"),
         };
         if rc != 0 {

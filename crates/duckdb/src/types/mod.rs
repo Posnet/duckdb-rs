@@ -27,6 +27,7 @@ mod value_ref;
 
 mod ordered_map;
 mod string;
+mod map_support;
 
 /// Empty struct that can be used to fill in a query parameter as `NULL`.
 ///
